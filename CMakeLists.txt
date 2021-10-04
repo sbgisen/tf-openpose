@@ -30,6 +30,10 @@ catkin_package(
   CATKIN_DEPENDS rospy message_generation message_runtime
 ) 
 
+include_directories(
+# include
+  ${catkin_INCLUDE_DIRS}
+)
 
 catkin_install_python(PROGRAMS
   scripts/broadcaster_ros.py
