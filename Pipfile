@@ -22,6 +22,7 @@ opencv-contrib-python = "*"
 empy = "*"
 pyyaml = "*"
 rospkg = "*"
+numpy = "*"
 
 [dev-packages]
 
