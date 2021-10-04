@@ -36,7 +36,7 @@ class PoseEstimator(object):
             exit()
 
         self.__tf_config = tf.ConfigProto()
-        self.__tf_config.gpu_options.allow_growth = True
+        self.__tf_config.gpu_options.per_process_gpu_memory_fraction = 0.25
         self.__tf_config.gpu_options.visible_device_list = "0"
         self.__pose_estimator = None
 
