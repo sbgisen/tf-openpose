@@ -31,3 +31,4 @@ python_version = "3.6"
 
 [scripts]
 pafprocess = "cd src/tfpose_ros/pafprocess && swig -python -c++ pafprocess.i && python3 setup.py build_ext --inplace"
+launch = "roslaunch tfpose_ros tfpose.launch"

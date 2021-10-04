@@ -1,9 +1,10 @@
 <?xml version="1.0"?>
 <launch>
     <arg name="gpuid" default="0" />
-    <arg name="color_image" default="/realsense_front/color/image_rect_color/compressed" />
-    <arg name="depth_image" default="/realsense_front/depth/image_rect_raw/compressed" />
-    <arg name="model" default="$(find tfpose_ros)/models/graph/cmu/graph_opt.pb" />
+    <arg name="front_camera" default="realsense_front" />
+    <arg name="color_image" default="/$(arg front_camera)/color/image_rect_color/compressed" />
+    <arg name="depth_image" default="/$(arg front_camera)/depth/image_rect_raw/compressed" />
+    <arg name="model" default="$(find tfpose_ros)/models/graph/mobilenet_thin/graph_opt.pb" />
     <arg name="resolution" default="432x368" />
     <arg name="visualize" default="true" />
     <arg name="hertz" default="30" />
