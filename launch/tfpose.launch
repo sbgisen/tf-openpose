@@ -7,7 +7,7 @@
   <arg name="points" default="/$(arg front_camera)/depth_registered/points"/>
   <arg name="model" default="$(find tfpose_ros)/models/graph/mobilenet_thin/graph_opt.pb"/>
   <arg name="resolution" default="432x368"/>
-  <arg name="visualize" default="true"/>
+  <arg name="visualize" default="false"/>
   <arg name="hertz" default="30"/>
   <arg name="detection_id_increment" default="20"/>
   <arg name="detection_id_offset" default="9"/>
@@ -19,12 +19,8 @@
     <param name="hertz" value="$(arg hertz)"/>
     <param name="detection_id_increment" value="$(arg detection_id_increment)"/>
     <param name="detection_id_offset" value="$(arg detection_id_offset)"/>
+    <param name="visualize" value="$(arg visualize)"/>
     <remap from="~color" to="$(arg color_image)"/>
     <remap from="~points" to="$(arg points)"/>
-  </node>
-
-  <node if="$(arg visualize)" name="pose_estimator_vis" pkg="tfpose_ros" type="visualization.py" output="screen" required="true">
-    <param name="camera" value="$(arg color_image)"/>
-    <param name="pose" value="/pose_estimator/persons"/>
   </node>
 </launch>

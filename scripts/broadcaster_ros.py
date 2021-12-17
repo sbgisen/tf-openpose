@@ -31,6 +31,7 @@ class PoseEstimator(object):
         self.__prev_time = rospy.Time.now()
         self.__detection_id_increment = rospy.get_param('~detection_id_increment', 1)
         self.__last_detection_id = rospy.get_param('~detection_id_offset', 0)
+        self.__visualize = rospy.get_param('~visualize', False)
 
         self.__graph_path = None
         try:
@@ -54,6 +55,8 @@ class PoseEstimator(object):
         self.__pub_keypoints = rospy.Publisher('~persons', Persons, queue_size=1)
         self.__pub_markers = rospy.Publisher('~markers', MarkerArray, queue_size=10)
         self.__pub_pose = rospy.Publisher('~poses', DetectedPersons, queue_size=10)
+        if self.__visualize:
+            self.__pub_image = rospy.Publisher('~image', Image, queue_size=10)
 
         self.__cv_bridge = CvBridge()
         color_sub = message_filters.Subscriber("~color", Image)
@@ -138,6 +141,9 @@ class PoseEstimator(object):
         self.__pub_markers.publish(MarkerArray(markers=[Marker(header=points.header, action=Marker.DELETEALL)]))
         self.__pub_markers.publish(self.__to_markers(msg))
         self.__pub_pose.publish(self.__to_spencer_msg(msg))
+        if self.__visualize:
+            image = TfPoseEstimator.draw_humans(cv_image, humans, imgcopy=False)
+            self.__pub_image.publish(self.__cv_bridge.cv2_to_imgmsg(image, 'bgr8'))
 
     def __to_markers(self, keypoints):
         markers = MarkerArray()
