@@ -10,6 +10,7 @@ import rospkg
 import rospy
 from sensor_msgs.msg import Image, PointCloud2
 import sensor_msgs.point_cloud2 as pc2
+from spencer_tracking_msgs.msg import DetectedPersons, DetectedPerson
 from std_msgs.msg import ColorRGBA
 from std_srvs.srv import SetBool, SetBoolResponse
 from visualization_msgs.msg import MarkerArray, Marker
@@ -28,6 +29,8 @@ class PoseEstimator(object):
         self.__hz = rospy.get_param('~hertz', 5)
         self.__tf_lock = Lock()
         self.__prev_time = rospy.Time.now()
+        self.__detection_id_increment = rospy.get_param('~detection_id_increment', 1)
+        self.__last_detection_id = rospy.get_param('~detection_id_offset', 0)
 
         self.__graph_path = None
         try:
@@ -48,8 +51,9 @@ class PoseEstimator(object):
 
         rospy.Service('~enable', SetBool, self.__set_enable)
 
-        self.__pub_pose = rospy.Publisher('~pose', Persons, queue_size=1)
+        self.__pub_keypoints = rospy.Publisher('~persons', Persons, queue_size=1)
         self.__pub_markers = rospy.Publisher('~markers', MarkerArray, queue_size=10)
+        self.__pub_pose = rospy.Publisher('~poses', DetectedPersons, queue_size=10)
 
         self.__cv_bridge = CvBridge()
         color_sub = message_filters.Subscriber("~color", Image)
@@ -130,9 +134,10 @@ class PoseEstimator(object):
         msg.image_h = cv_image.shape[0]
         msg.header = points.header
 
-        self.__pub_pose.publish(msg)
+        self.__pub_keypoints.publish(msg)
         self.__pub_markers.publish(MarkerArray(markers=[Marker(header=points.header, action=Marker.DELETEALL)]))
         self.__pub_markers.publish(self.__to_markers(msg))
+        self.__pub_pose.publish(self.__to_spencer_msg(msg))
 
     def __to_markers(self, keypoints):
         markers = MarkerArray()
@@ -173,6 +178,33 @@ class PoseEstimator(object):
             markers.markers.append(marker)
 
         return markers
+
+    def __to_spencer_msg(self, keypoints):
+        persons = DetectedPersons()
+        persons.header = keypoints.header
+        for p in keypoints.persons:
+            for k in p.body_part:
+                if k.part_id in [1, 8, 11]:
+                    person = DetectedPerson()
+                    person.modality = DetectedPerson.MODALITY_GENERIC_RGBD
+                    person.pose.pose.position.x = k.x
+                    person.pose.pose.position.y = k.y
+                    person.pose.pose.position.z = k.z
+                    person.confidence = k.confidence
+                    person.detection_id = self.__last_detection_id
+                    self.__last_detection_id += self.__detection_id_increment
+                    large_var = 999999999
+                    pose_variance = 0.05
+                    person.pose.covariance[0 * 6 + 0] = pose_variance
+                    person.pose.covariance[1 * 6 + 1] = pose_variance
+                    person.pose.covariance[2 * 6 + 2] = pose_variance
+                    person.pose.covariance[3 * 6 + 3] = large_var
+                    person.pose.covariance[4 * 6 + 4] = large_var
+                    person.pose.covariance[5 * 6 + 5] = large_var
+                    persons.detections.append(person)
+                    break
+
+        return persons
 
 
 if __name__ == '__main__':

@@ -9,23 +9,22 @@
   <arg name="resolution" default="432x368"/>
   <arg name="visualize" default="true"/>
   <arg name="hertz" default="30"/>
+  <arg name="detection_id_increment" default="20"/>
+  <arg name="detection_id_offset" default="9"/>
 
   <node name="pose_estimator" pkg="tfpose_ros" type="broadcaster_ros.py" output="screen" required="true">
     <env name="CUDA_VISIBLE_DEVICES" value="$(arg gpuid)"/>
     <param name="model" value="$(arg model)"/>
     <param name="resolution" value="$(arg resolution)"/>
     <param name="hertz" value="$(arg hertz)"/>
+    <param name="detection_id_increment" value="$(arg detection_id_increment)"/>
+    <param name="detection_id_offset" value="$(arg detection_id_offset)"/>
     <remap from="~color" to="$(arg color_image)"/>
     <remap from="~points" to="$(arg points)"/>
   </node>
 
   <node if="$(arg visualize)" name="pose_estimator_vis" pkg="tfpose_ros" type="visualization.py" output="screen" required="true">
     <param name="camera" value="$(arg color_image)"/>
-    <param name="pose" value="/pose_estimator/pose"/>
-  </node>
-
-  <node name="pose_for_spencer" pkg="tfpose_ros" type="pose_for_spencer.py" output="screen" required="true">
-    <remap from="~points" to="$(arg points)"/>
-    <remap from="~persons" to="/pose_estimator/pose"/>
+    <param name="pose" value="/pose_estimator/persons"/>
   </node>
 </launch>
