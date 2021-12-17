@@ -1,17 +1,21 @@
 #!/usr/bin/env python
-import cv2
 import numpy as np
 import tensorflow as tf
 from threading import Lock
 
 from cv_bridge import CvBridge, CvBridgeError
+from geometry_msgs.msg import Point
 import message_filters
 import rospkg
 import rospy
-from sensor_msgs.msg import CompressedImage
+from sensor_msgs.msg import Image, PointCloud2
+import sensor_msgs.point_cloud2 as pc2
+from std_msgs.msg import ColorRGBA
 from std_srvs.srv import SetBool, SetBoolResponse
+from visualization_msgs.msg import MarkerArray, Marker
 
 from tfpose_ros.estimator import TfPoseEstimator
+from tfpose_ros.common import CocoPairsRender, CocoColors
 from tfpose_ros.msg import Persons, Person, BodyPartElm
 from tfpose_ros.networks import model_wh
 
@@ -45,11 +49,12 @@ class PoseEstimator(object):
         rospy.Service('~enable', SetBool, self.__set_enable)
 
         self.__pub_pose = rospy.Publisher('~pose', Persons, queue_size=1)
+        self.__pub_markers = rospy.Publisher('~markers', MarkerArray, queue_size=10)
 
         self.__cv_bridge = CvBridge()
-        color_sub = message_filters.Subscriber("~color", CompressedImage)
-        depth_sub = message_filters.Subscriber("~depth", CompressedImage)
-        sub = message_filters.ApproximateTimeSynchronizer([color_sub, depth_sub], 10, 0.5)
+        color_sub = message_filters.Subscriber("~color", Image)
+        points_sub = message_filters.Subscriber("~points", PointCloud2)
+        sub = message_filters.ApproximateTimeSynchronizer([color_sub, points_sub], 10, 0.1)
         sub.registerCallback(self.__callback_image)
 
     def __set_enable(self, msg):
@@ -64,10 +69,9 @@ class PoseEstimator(object):
         message = '{} pose estimator.'.format('Enabled' if msg.data else 'Disabled')
         return SetBoolResponse(success=True, message=message)
 
-    def __humans_to_msg(self, humans, depth_image):
+    def __humans_to_msg(self, humans, points):
         persons = Persons()
-        image_w = depth_image.shape[1]
-        image_h = depth_image.shape[0]
+        height, width = points.height, points.width
 
         for human in humans:
             person = Person()
@@ -77,24 +81,33 @@ class PoseEstimator(object):
 
                 body_part_msg = BodyPartElm()
                 body_part_msg.part_id = body_part.part_idx
-                body_part_msg.x = body_part.x
-                body_part_msg.y = body_part.y
-                body_part_msg.z = depth_image[int(body_part.y * image_h), int(body_part.x * image_w)]
+                x, y = np.round(body_part.x * width), np.round(body_part.y * height)
+                expand = 3
+                centers = [[xx, yy] for yy in range(max(int(y - expand), 0), min(int(y + expand), height))
+                           for xx in range(max(int(x - expand), 0), min(int(x + expand), width))]
+                if k in range(14, 18):
+                    centers = [[int(x), int(y)]]
+                pts = [p for p in pc2.read_points(points, ('x', 'y', 'z'), uvs=centers, skip_nans=True)]
+                if not pts:
+                    continue
+                pt = np.mean(pts, axis=0)
+                body_part_msg.x = pt[0]
+                body_part_msg.y = pt[1]
+                body_part_msg.z = pt[2]
                 body_part_msg.confidence = body_part.score
                 person.body_part.append(body_part_msg)
             persons.persons.append(person)
 
         return persons
 
-    def __callback_image(self, color_msg, depth_msg):
+    def __callback_image(self, color, points):
         if not self.__is_active:
             return
         if rospy.Duration(1. / self.__hz) > rospy.Time.now() - self.__prev_time:
             return
 
         try:
-            color_image = cv2.imdecode(np.fromstring(color_msg.data, np.uint8), cv2.IMREAD_COLOR)
-            depth_image = cv2.imdecode(np.fromstring(depth_msg.data, np.uint8), cv2.IMREAD_UNCHANGED)
+            cv_image = self.__cv_bridge.imgmsg_to_cv2(color, 'bgr8')
         except CvBridgeError as e:
             rospy.logerr('Converting Image Error. ' + str(e))
             return
@@ -108,16 +121,58 @@ class PoseEstimator(object):
         try:
             if self.__pose_estimator is not None:
                 humans = self.__pose_estimator.inference(
-                    color_image, resize_to_default=True, upsample_size=self.__resize_out_ratio)
+                    cv_image, resize_to_default=True, upsample_size=self.__resize_out_ratio)
         finally:
             self.__tf_lock.release()
 
-        msg = self.__humans_to_msg(humans, depth_image)
-        msg.image_w = color_image.shape[1]
-        msg.image_h = color_image.shape[0]
-        msg.header = color_msg.header
+        msg = self.__humans_to_msg(humans, points)
+        msg.image_w = cv_image.shape[1]
+        msg.image_h = cv_image.shape[0]
+        msg.header = points.header
 
         self.__pub_pose.publish(msg)
+        self.__pub_markers.publish(MarkerArray(markers=[Marker(header=points.header, action=Marker.DELETEALL)]))
+        self.__pub_markers.publish(self.__to_markers(msg))
+
+    def __to_markers(self, keypoints):
+        markers = MarkerArray()
+
+        links = CocoPairsRender
+
+        for i, p in enumerate(keypoints.persons):
+            body_parts = [None] * 18
+            for k in p.body_part:
+                body_parts[k.part_id] = k
+
+            marker = Marker()
+            marker.header = keypoints.header
+            marker.ns = 'person_{}'.format(i)
+            marker.type = Marker.LINE_LIST
+            marker.action = Marker.ADD
+            marker.scale.x = 0.05
+            id = 0
+            for ci, link in enumerate(links):
+                if body_parts[link[0]] is not None and body_parts[link[1]] is not None:
+                    marker.points.append(Point(body_parts[link[0]].x,
+                                               body_parts[link[0]].y,
+                                               body_parts[link[0]].z))
+                    marker.points.append(Point(body_parts[link[1]].x,
+                                               body_parts[link[1]].y,
+                                               body_parts[link[1]].z))
+                    color = CocoColors[ci]
+                    marker.id = id
+                    id += 1
+                    marker.colors.append(ColorRGBA(float(color[0]) / 255,
+                                                   float(color[1]) / 255,
+                                                   float(color[2]) / 255,
+                                                   1.0))
+                    marker.colors.append(ColorRGBA(float(color[0]) / 255,
+                                                   float(color[1]) / 255,
+                                                   float(color[2]) / 255,
+                                                   1.0))
+            markers.markers.append(marker)
+
+        return markers
 
 
 if __name__ == '__main__':
