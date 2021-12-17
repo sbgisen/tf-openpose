@@ -66,6 +66,8 @@ class PoseEstimator(object):
 
     def __humans_to_msg(self, humans, depth_image):
         persons = Persons()
+        image_w = depth_image.shape[1]
+        image_h = depth_image.shape[0]
 
         for human in humans:
             person = Person()
@@ -77,7 +79,7 @@ class PoseEstimator(object):
                 body_part_msg.part_id = body_part.part_idx
                 body_part_msg.x = body_part.x
                 body_part_msg.y = body_part.y
-                body_part_msg.z = depth_image[int(body_part.y), int(body_part.x)]
+                body_part_msg.z = depth_image[int(body_part.y * image_h), int(body_part.x * image_w)]
                 body_part_msg.confidence = body_part.score
                 person.body_part.append(body_part_msg)
             persons.persons.append(person)
@@ -104,8 +106,9 @@ class PoseEstimator(object):
         self.__prev_time = rospy.Time.now()
 
         try:
-            humans = self.__pose_estimator.inference(
-                color_image, resize_to_default=True, upsample_size=self.__resize_out_ratio)
+            if self.__pose_estimator is not None:
+                humans = self.__pose_estimator.inference(
+                    color_image, resize_to_default=True, upsample_size=self.__resize_out_ratio)
         finally:
             self.__tf_lock.release()
 

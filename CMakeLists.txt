@@ -37,6 +37,7 @@ include_directories(
 
 catkin_install_python(PROGRAMS
   scripts/broadcaster_ros.py
+  scripts/pose_for_spencer.py
   scripts/visualization.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
