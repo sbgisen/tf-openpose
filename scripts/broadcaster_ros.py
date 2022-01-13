@@ -49,6 +49,7 @@ class PoseEstimator(object):
         self.__pose_estimator = None
 
         self.__is_active = False
+        self.__restart = False
 
         rospy.Service('~enable', SetBool, self.__set_enable)
 
@@ -67,6 +68,7 @@ class PoseEstimator(object):
     def __set_enable(self, msg):
         if self.__is_active and not msg.data:
             self.__pose_estimator = None
+            self.__restart = True
         elif not self.__is_active and msg.data:
             self.__pose_estimator = TfPoseEstimator(
                 self.__graph_path,
@@ -108,6 +110,8 @@ class PoseEstimator(object):
         return persons
 
     def __callback_image(self, color, points):
+        if self.__restart:
+            rospy.signal_shutdown('respawn to clean gpu memory')
         if not self.__is_active:
             return
         if rospy.Duration(1. / self.__hz) > rospy.Time.now() - self.__prev_time:
@@ -126,9 +130,10 @@ class PoseEstimator(object):
         self.__prev_time = rospy.Time.now()
 
         try:
-            if self.__pose_estimator is not None:
-                humans = self.__pose_estimator.inference(
-                    cv_image, resize_to_default=True, upsample_size=self.__resize_out_ratio)
+            if self.__pose_estimator is None:
+                return
+            humans = self.__pose_estimator.inference(
+                cv_image, resize_to_default=True, upsample_size=self.__resize_out_ratio)
         finally:
             self.__tf_lock.release()
 

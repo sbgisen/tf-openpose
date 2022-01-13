@@ -12,7 +12,7 @@
   <arg name="detection_id_increment" default="20"/>
   <arg name="detection_id_offset" default="9"/>
 
-  <node name="pose_estimator" pkg="tfpose_ros" type="broadcaster_ros.py" output="screen" required="true">
+  <node name="pose_estimator" pkg="tfpose_ros" type="broadcaster_ros.py" output="screen" respawn="true">
     <env name="CUDA_VISIBLE_DEVICES" value="$(arg gpuid)"/>
     <param name="model" value="$(arg model)"/>
     <param name="resolution" value="$(arg resolution)"/>
