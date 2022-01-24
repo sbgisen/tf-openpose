@@ -143,7 +143,6 @@ class PoseEstimator(object):
         msg.header = points.header
 
         self.__pub_keypoints.publish(msg)
-        self.__pub_markers.publish(MarkerArray(markers=[Marker(header=points.header, action=Marker.DELETEALL)]))
         self.__pub_markers.publish(self.__to_markers(msg))
         self.__pub_pose.publish(self.__to_spencer_msg(msg))
         if self.__visualize:
@@ -155,6 +154,7 @@ class PoseEstimator(object):
 
         links = CocoPairsRender
 
+        markers.markers.append(Marker(header=keypoints.header, action=Marker.DELETEALL))
         for i, p in enumerate(keypoints.persons):
             body_parts = [None] * 18
             for k in p.body_part:
@@ -166,6 +166,7 @@ class PoseEstimator(object):
             marker.type = Marker.LINE_LIST
             marker.action = Marker.ADD
             marker.scale.x = 0.05
+            marker.lifetime = rospy.Duration(1)
             id = 0
             for ci, link in enumerate(links):
                 if body_parts[link[0]] is not None and body_parts[link[1]] is not None:
